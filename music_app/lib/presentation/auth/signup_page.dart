@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 // import '../../core/theme/app_theme.dart';
 import '../../data/sources/api_service.dart';
-import '../home/home_page.dart';
+import '../theme/theme_selection_page.dart';
 import 'signin_page.dart';
 
 class SignUpPage extends StatefulWidget {
@@ -58,11 +58,13 @@ class _SignUpPageState extends State<SignUpPage>
         // ✅ Tự động lưu token và chuyển sang HomePage
         if (res['token'] != null) {
           final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('token', res['token']);
+          await prefs.setString('jwt_token', res['token']);
         }
 
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Sign up successful! Logging in...")),
+          const SnackBar(
+            content: Text("Sign up successful! Choose your theme..."),
+          ),
         );
 
         await Future.delayed(const Duration(milliseconds: 900));
@@ -70,7 +72,9 @@ class _SignUpPageState extends State<SignUpPage>
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const HomePage()),
+          MaterialPageRoute(
+            builder: (_) => const ThemeSelectionPage(isFirstTime: true),
+          ),
         );
       } else {
         String errorMsg =
@@ -91,80 +95,72 @@ class _SignUpPageState extends State<SignUpPage>
 
   @override
   Widget build(BuildContext context) {
+    final canPop = Navigator.of(context).canPop();
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
+        elevation: 0,
+        leading:
+            canPop
+                ? IconButton(
+                  icon: Icon(
+                    Icons.chevron_left,
+                    color: Theme.of(context).colorScheme.onSurface,
+                    size: 28,
+                  ),
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  tooltip: 'Back',
+                )
+                : null,
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: SingleChildScrollView(
             child: Column(
               children: [
-                const SizedBox(height: 60),
+                const SizedBox(height: 40),
                 Image.asset('assets/logo/logo.png', height: 130),
                 const SizedBox(height: 20),
-                const Text(
+                Text(
                   "Create your account",
-                  style: TextStyle(
-                    fontSize: 26,
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 30),
                 TextField(
                   controller: _usernameController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.person, color: Colors.white70),
+                  style: Theme.of(context).textTheme.bodyLarge,
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.person),
                     hintText: "Username",
-                    hintStyle: const TextStyle(color: Colors.white54),
-                    filled: true,
-                    fillColor: Colors.white10,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _emailController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.email, color: Colors.white70),
+                  style: Theme.of(context).textTheme.bodyLarge,
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.email),
                     hintText: "Email",
-                    hintStyle: const TextStyle(color: Colors.white54),
-                    filled: true,
-                    fillColor: Colors.white10,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _passwordController,
                   obscureText: !_showPassword,
-                  style: const TextStyle(color: Colors.white),
+                  style: Theme.of(context).textTheme.bodyLarge,
                   decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.lock, color: Colors.white70),
+                    prefixIcon: const Icon(Icons.lock),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _showPassword ? Icons.visibility : Icons.visibility_off,
-                        color: Colors.white70,
                       ),
                       onPressed:
                           () => setState(() => _showPassword = !_showPassword),
                     ),
                     hintText: "Password",
-                    hintStyle: const TextStyle(color: Colors.white54),
-                    filled: true,
-                    fillColor: Colors.white10,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -172,7 +168,8 @@ class _SignUpPageState extends State<SignUpPage>
                 ElevatedButton(
                   onPressed: _isLoading ? null : _signUp,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.cyanAccent[700],
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
                     minimumSize: const Size(double.infinity, 55),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -188,22 +185,19 @@ class _SignUpPageState extends State<SignUpPage>
                               size: 28,
                             ),
                           )
-                          : const Text(
+                          : Text(
                             "Sign Up",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: Theme.of(context).textTheme.bodyLarge
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                 ),
                 const SizedBox(height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text(
+                    Text(
                       "Already have an account?",
-                      style: TextStyle(color: Colors.white70),
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     TextButton(
                       onPressed: () {
@@ -212,10 +206,10 @@ class _SignUpPageState extends State<SignUpPage>
                           MaterialPageRoute(builder: (_) => const SignInPage()),
                         );
                       },
-                      child: const Text(
+                      child: Text(
                         "Sign In",
                         style: TextStyle(
-                          color: Colors.cyanAccent,
+                          color: Theme.of(context).colorScheme.primary,
                           fontWeight: FontWeight.bold,
                         ),
                       ),

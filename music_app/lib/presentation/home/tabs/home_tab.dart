@@ -1,52 +1,124 @@
-import 'package'
-    ':flutter/material.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../data/sources/api_service.dart';
+import '../../../data/models/player_state_model.dart';
+import '../../player/player_provider.dart';
 
-class HomeTab extends StatelessWidget {
+class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // Không cần 'final size' nữa nếu chúng ta dùng chiều cao cố định,
-    // nhưng có thể giữ lại nếu bạn vẫn muốn dùng
-    // final size = MediaQuery.of(context).size;
+  State<HomeTab> createState() => _HomeTabState();
+}
 
+class _HomeTabState extends State<HomeTab> {
+  final ScrollController _scrollController = ScrollController();
+  final List<Map<String, dynamic>> _songs = [];
+  int _page = 1;
+  final int _limit = 20;
+  bool _isLoading = false;
+  bool _hasNext = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitial();
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (!_hasNext || _isLoading) return;
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 100) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _loadInitial() async {
+    setState(() => _isLoading = true);
+    try {
+      final pageData = await ApiService.getSongsPage(
+        page: _page,
+        limit: _limit,
+      );
+      final items =
+          (pageData['items'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      setState(() {
+        _songs.clear();
+        _songs.addAll(items);
+        _hasNext = pageData['hasNext'] == true && items.isNotEmpty;
+      });
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadMore() async {
+    setState(() => _isLoading = true);
+    try {
+      _page += 1;
+      final pageData = await ApiService.getSongsPage(
+        page: _page,
+        limit: _limit,
+      );
+      final items =
+          (pageData['items'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      setState(() {
+        _songs.addAll(items);
+        _hasNext = pageData['hasNext'] == true && items.isNotEmpty;
+      });
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+        foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
         elevation: 0,
         toolbarHeight: 80,
         title: Row(
-          children: const [
-            CircleAvatar(
+          children: [
+            const CircleAvatar(
               radius: 24,
               backgroundImage: AssetImage('assets/images/avatar.jpg'),
             ),
-            SizedBox(width: 10),
+            const SizedBox(width: 10),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'Welcome back !',
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: isDark ? Colors.white70 : Colors.black54,
+                  ),
                 ),
                 Text(
-                  'Chandrama',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
+                  'Music App',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: isDark ? Colors.white : Colors.black87,
                   ),
                 ),
               ],
             ),
           ],
         ),
-        actions: const [
-          Icon(Icons.bar_chart_rounded, color: Colors.white),
-          SizedBox(width: 12),
-          Icon(Icons.notifications_none, color: Colors.white),
-          SizedBox(width: 16),
+        actions: [
+          Icon(
+            Icons.bar_chart_rounded,
+            color: Theme.of(context).iconTheme.color,
+          ),
+          const SizedBox(width: 12),
+          Icon(
+            Icons.notifications_none,
+            color: Theme.of(context).iconTheme.color,
+          ),
+          const SizedBox(width: 16),
         ],
       ),
       body: SingleChildScrollView(
@@ -56,86 +128,68 @@ class HomeTab extends StatelessWidget {
           children: [
             const SizedBox(height: 25),
 
-            // === Phần 1: Continue Listening ===
-            const _SectionTitle(title: "Continue Listening"),
+            // === Phần 1: All Songs ===
+            const _SectionTitle(title: "All Songs"),
             const SizedBox(height: 12),
             SizedBox(
-              // Dùng chiều cao cố định thường dễ quản lý hơn % màn hình
-              height: 90,
-              // Dùng ListView.builder để tối ưu hiệu suất
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: continueListeningItems.length,
-                itemBuilder: (context, index) {
-                  final title = continueListeningItems[index];
-                  return _ContinueListeningCard(title: title);
-                },
-              ),
+              height: 200,
+              child:
+                  _songs.isEmpty && _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _songs.isEmpty
+                      ? const Center(
+                        child: Text(
+                          'No songs available',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                      )
+                      : ListView.builder(
+                        controller: _scrollController,
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _songs.length + (_hasNext ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (_hasNext && index == _songs.length) {
+                            // loader tail
+                            return const SizedBox(
+                              width: 80,
+                              child: Center(
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+                          final songMap = _songs[index];
+                          final songObj = Song.fromJson(songMap);
+                          final playlist =
+                              _songs.map((m) => Song.fromJson(m)).toList();
+                          return _SongCard(
+                            title: songMap['title'] ?? 'Unknown',
+                            artist: songMap['artist'] ?? 'Unknown',
+                            imageUrl: songMap['imageUrl'],
+                            onTap: () {
+                              final provider = context.read<PlayerProvider>();
+                              provider.setPlaylistAndPlay(
+                                playlist,
+                                currentSong: songObj,
+                              );
+                              Navigator.pushNamed(context, '/player');
+                            },
+                          );
+                        },
+                      ),
             ),
             const SizedBox(height: 30),
-
-            // === Phần 2: Your recent rotation ===
-            const _SectionTitle(title: "Your recent rotation"),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 170, // Chiều cao cố định
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: mixItems.length,
-                itemBuilder: (context, index) {
-                  final mix = mixItems[index];
-                  return _MixCard(
-                    title: mix['title']!,
-                    imagePath: mix['image']!,
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 30),
-
-            // === Phần 3: Based on your recent listening ===
-            const _SectionTitle(title: "Based on your recent listening"),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 190, // Chiều cao cố định
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: recentItems.length,
-                itemBuilder: (context, index) {
-                  final item = recentItems[index];
-                  return _RecentItemCard(imagePath: item['image']!);
-                },
-              ),
-            ),
-            const SizedBox(height: 30), // Thêm khoảng đệm cuối
           ],
         ),
       ),
     );
   }
 }
-
-// --- TÁCH DỮ LIỆU RA KHỎI PHẦN BUILD ---
-// (Trong app thật, cái này sẽ đến từ API hoặc State Management)
-
-final continueListeningItems = [
-  "Coffee & Jazz",
-  "Anything Goes",
-  "Harry's House",
-  "Lo-fi Beats",
-];
-
-final mixItems = [
-  {"title": "Pop Mix", "image": "assets/logo/test_im.png"},
-  {"title": "Chill Mix", "image": "assets/logo/test_im.png"},
-  {"title": "Workout Mix", "image": "assets/logo/test_im.png"},
-];
-
-final recentItems = [
-  {"image": "assets/logo/test_im.png"},
-  {"image": "assets/logo/test_im.png"},
-  {"image": "assets/logo/test_im.png"},
-];
 
 // --- TÁCH CÁC WIDGET CON ---
 
@@ -146,91 +200,79 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: const TextStyle(
-        color: Colors.white,
-        fontWeight: FontWeight.bold,
-        fontSize: 20,
-      ),
-    );
+    return Text(title, style: Theme.of(context).textTheme.titleLarge);
   }
 }
 
-// Widget cho mục "Continue Listening"
-class _ContinueListeningCard extends StatelessWidget {
+// Widget cho mục "Song Card"
+class _SongCard extends StatelessWidget {
   final String title;
-  const _ContinueListeningCard({required this.title});
+  final String artist;
+  final String? imageUrl;
+  final VoidCallback? onTap;
+
+  const _SongCard({
+    required this.title,
+    required this.artist,
+    this.imageUrl,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 150,
-      margin: const EdgeInsets.only(right: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Text(
-            title,
-            style: const TextStyle(color: Colors.white70, fontSize: 14),
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: 160,
+        margin: const EdgeInsets.only(right: 14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: const Color(0xFF1E1E1E),
+          image:
+              imageUrl != null
+                  ? DecorationImage(
+                    image: NetworkImage(imageUrl!),
+                    fit: BoxFit.cover,
+                  )
+                  : null,
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Colors.transparent, Colors.black.withValues(alpha: 0.7)],
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  artist,
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-// Widget cho mục "Mix Section"
-class _MixCard extends StatelessWidget {
-  final String title;
-  final String imagePath;
-
-  const _MixCard({required this.title, required this.imagePath});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 160,
-      margin: const EdgeInsets.only(right: 14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        image: DecorationImage(image: AssetImage(imagePath), fit: BoxFit.cover),
-      ),
-      alignment: Alignment.bottomLeft,
-      padding: const EdgeInsets.all(12),
-      child: Text(
-        title,
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.bold,
-          fontSize: 16,
-          backgroundColor: Colors.black45, // Thêm nền để dễ đọc
-        ),
-      ),
-    );
-  }
-}
-
-// Widget cho mục "Recent Section"
-class _RecentItemCard extends StatelessWidget {
-  final String imagePath;
-  const _RecentItemCard({required this.imagePath});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 180,
-      margin: const EdgeInsets.only(right: 16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        image: DecorationImage(image: AssetImage(imagePath), fit: BoxFit.cover),
       ),
     );
   }

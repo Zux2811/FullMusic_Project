@@ -1,18 +1,69 @@
-# React + Vite
+# Admin Dashboard - API Base URL Configuration
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The admin dashboard talks to the backend via a configurable base URL.
+To avoid accidental calls to localhost in production, always set VITE_API_BASE_URL.
 
-Currently, two official plugins are available:
+## Quick start
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+1) Install dependencies
 
-## React Compiler
+```
+yarn
+# or
+npm install
+```
 
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
+2) Create a .env file with your API base URL
 
-Note: This will impact Vite dev & build performances.
+- Local development (runs the backend on localhost):
 
-## Expanding the ESLint configuration
+```
+# .env.development
+VITE_API_BASE_URL=http://localhost:5000/api
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- Production / Staging (Render deployment):
+
+```
+# .env.production
+VITE_API_BASE_URL=https://music-app-backend-aijn.onrender.com/api
+```
+
+You can also set VITE_API_BASE_URL in your deployment provider’s environment settings.
+
+3) Start the dashboard
+
+```
+yarn dev
+# or
+npm run dev
+```
+
+## Behavior when VITE_API_BASE_URL is missing
+
+- In development: the app falls back to http://localhost:5000/api and prints a console warning.
+- In production builds: the app will throw at startup to prevent accidentally using the wrong backend.
+
+See src/api/api.js for details.
+
+## Align with the Flutter app
+
+The Flutter client uses:
+
+```
+ApiConstants.baseUrl = "https://music-app-backend-aijn.onrender.com/api"
+```
+
+Be sure the admin dashboard VITE_API_BASE_URL points to the same environment as Flutter to keep data consistent.
+
+## Test matrix
+
+Please verify these core flows against your chosen backend environment:
+- Admin login
+- Manage users (list, delete)
+- Manage songs (list)
+- Manage reports (list, grouped, delete)
+
+Test both:
+- Local: VITE_API_BASE_URL=http://localhost:5000/api
+- Render: VITE_API_BASE_URL=https://music-app-backend-aijn.onrender.com/api

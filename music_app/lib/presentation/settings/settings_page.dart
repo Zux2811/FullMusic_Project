@@ -1,76 +1,54 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../../data/sources/api_service.dart';
-import '../../theme/theme_provider.dart';
+import '../theme/theme_provider.dart';
 
-class SettingsTab extends StatelessWidget {
-  const SettingsTab({super.key});
-
-  Future<void> _logout(BuildContext context) async {
-    await ApiService.signOut();
-    if (context.mounted) {
-      Navigator.pushReplacementNamed(context, '/signin_option');
-    }
-  }
+class SettingsPage extends StatelessWidget {
+  const SettingsPage({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          "Settings",
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: isDark ? Colors.white : Colors.black87,
-          ),
-        ),
-        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
-        foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
+        title: const Text('Settings'),
         centerTitle: true,
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
         children: [
           // Theme Section
-          Text(
-            'Appearance',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: isDark ? Colors.white : Colors.black87,
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Appearance',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 16),
+                _ThemeSettingCard(),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
-          _buildThemeSection(context),
-          const SizedBox(height: 32),
-
-          // Logout Section
-          Text(
-            'Account',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: isDark ? Colors.white : Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: () => _logout(context),
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 50),
-              backgroundColor: Colors.red,
-            ),
-            icon: const Icon(Icons.logout),
-            label: const Text("Logout"),
-          ),
+          const Divider(),
+          // Other settings can be added here
         ],
       ),
     );
   }
+}
 
-  Widget _buildThemeSection(BuildContext context) {
+class _ThemeSettingCard extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, _) {
         return Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.cyan.withAlpha(128), width: 1),
+            border: Border.all(
+              color: Colors.cyan.withAlpha(128),
+              width: 1,
+            ),
           ),
           child: Column(
             children: [
@@ -114,3 +92,4 @@ class SettingsTab extends StatelessWidget {
     );
   }
 }
+

@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/constants/api_constants.dart';
 
 class ApiService {
+  // ==================== AUTH METHODS ====================
+
   // Đăng ký tài khoản
   static Future<Map<String, dynamic>> signUp(
     String username,
@@ -29,10 +31,7 @@ class ApiService {
       if (contentType.contains('application/json')) {
         data = jsonDecode(res.body) as Map<String, dynamic>;
       } else {
-        data = {
-          'message': res.body,
-          'statusCode': res.statusCode,
-        };
+        data = {'message': res.body, 'statusCode': res.statusCode};
       }
       return data;
     } catch (e) {
@@ -60,22 +59,26 @@ class ApiService {
       if (contentType.contains('application/json')) {
         data = jsonDecode(res.body) as Map<String, dynamic>;
       } else {
-        // Ví dụ: Render trả về "Not Found" (text/plain)
         data = {
           'message': res.body.isNotEmpty ? res.body : res.reasonPhrase,
           'statusCode': res.statusCode,
         };
       }
 
-      if (res.statusCode == 200 && data['token'] != null) {
+      if (res.statusCode == 200) {
+        // Verify token is present on success
+        if (data['token'] == null || (data['token'] as String).isEmpty) {
+          return {'message': 'Server returned empty token', 'statusCode': 200};
+        }
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', data['token']);
+        await prefs.setString('jwt_token', data['token']);
         return data;
       }
 
-      // trả về thông điệp lỗi rõ ràng
       return {
-        'message': data['message'] ?? 'HTTP ${res.statusCode}: ${res.reasonPhrase ?? 'Unknown'}',
+        'message':
+            data['message'] ??
+            'HTTP ${res.statusCode}: ${res.reasonPhrase ?? 'Unknown'}',
         'statusCode': res.statusCode,
       };
     } catch (e) {
@@ -106,9 +109,13 @@ class ApiService {
         };
       }
 
-      if (res.statusCode == 200 && data['token'] != null) {
+      if (res.statusCode == 200) {
+        // Verify token is present on success
+        if (data['token'] == null || (data['token'] as String).isEmpty) {
+          return {'message': 'Server returned empty token', 'statusCode': 200};
+        }
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', data['token']);
+        await prefs.setString('jwt_token', data['token']);
       }
       return data;
     } catch (e) {
@@ -116,15 +123,411 @@ class ApiService {
     }
   }
 
+  // ==================== SONG METHODS ====================
+
+  // Lấy danh sách bài hát (có phân trang). Trả về chỉ items để tương thích cũ.
+  static Future<List<Map<String, dynamic>>> getSongs({
+    int page = 1,
+    int limit = 50,
+  }) async {
+    final url = Uri.parse("${ApiConstants.songs}?page=$page&limit=$limit");
+    try {
+      final token = await getToken();
+      final res = await http
+          .get(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              if (token != null) 'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 20));
+
+      if (res.statusCode == 200) {
+        final contentType = res.headers['content-type'] ?? '';
+        if (contentType.contains('application/json')) {
+          final decoded = jsonDecode(res.body);
+          if (decoded is List) {
+            // fallback nếu backend chưa hỗ trợ phân trang
+            return decoded.map((e) => e as Map<String, dynamic>).toList();
+          } else if (decoded is Map && decoded['items'] is List) {
+            return (decoded['items'] as List)
+                .map((e) => e as Map<String, dynamic>)
+                .toList();
+          }
+        }
+      }
+      return [];
+    } catch (e) {
+      // ignore print in production; kept for quick diagnostics
+      // print('Error fetching songs: $e');
+      return [];
+    }
+  }
+
+  // Trả về cả metadata phân trang
+  static Future<Map<String, dynamic>> getSongsPage({
+    int page = 1,
+    int limit = 50,
+  }) async {
+    final url = Uri.parse("${ApiConstants.songs}?page=$page&limit=$limit");
+    try {
+      final token = await getToken();
+      final res = await http
+          .get(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              if (token != null) 'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode == 200) {
+        final decoded = jsonDecode(res.body);
+        if (decoded is List) {
+          return {
+            'items': decoded.map((e) => e as Map<String, dynamic>).toList(),
+            'page': page,
+            'limit': limit,
+            'total': (decoded).length,
+            'totalPages': 1,
+            'hasNext': false,
+            'hasPrev': page > 1,
+          };
+        } else if (decoded is Map) {
+          return {
+            'items':
+                (decoded['items'] as List?)
+                    ?.map((e) => e as Map<String, dynamic>)
+                    .toList() ??
+                <Map<String, dynamic>>[],
+            'page': decoded['page'] ?? page,
+            'limit': decoded['limit'] ?? limit,
+            'total': decoded['total'] ?? 0,
+            'totalPages': decoded['totalPages'] ?? 1,
+            'hasNext': decoded['hasNext'] ?? false,
+            'hasPrev': decoded['hasPrev'] ?? page > 1,
+          };
+        }
+      }
+      return {
+        'items': <Map<String, dynamic>>[],
+        'page': page,
+        'limit': limit,
+        'total': 0,
+        'totalPages': 0,
+        'hasNext': false,
+        'hasPrev': page > 1,
+      };
+    } catch (e) {
+      return {
+        'items': <Map<String, dynamic>>[],
+        'page': page,
+        'limit': limit,
+        'total': 0,
+        'totalPages': 0,
+        'hasNext': false,
+        'hasPrev': page > 1,
+        'error': e.toString(),
+      };
+    }
+  }
+
+  // ==================== COMMENT METHODS ====================
+
+  // Thêm bình luận
+  static Future<Map<String, dynamic>> addComment({
+    required int? songId,
+    required int? playlistId,
+    required String content,
+    int? parentId,
+  }) async {
+    final url = Uri.parse(ApiConstants.comments);
+    try {
+      final token = await getToken();
+      if (token == null) {
+        return {'message': 'No token found'};
+      }
+
+      final res = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({
+              'song_id': songId,
+              'playlist_id': playlistId,
+              'content': content,
+              'parent_id': parentId,
+            }),
+          )
+          .timeout(const Duration(seconds: 20));
+
+      if (res.statusCode == 200) {
+        return jsonDecode(res.body) as Map<String, dynamic>;
+      }
+      return {'message': 'Failed to add comment'};
+    } catch (e) {
+      return {'message': e.toString()};
+    }
+  }
+
+  // Lấy bình luận theo bài hát hoặc playlist (có phân trang). Chỉ trả về items.
+  static Future<List<Map<String, dynamic>>> getComments({
+    int? songId,
+    int? playlistId,
+    int page = 1,
+    int limit = 50,
+  }) async {
+    final base = ApiConstants.comments;
+    final target = songId != null ? 'songId=$songId' : 'playlistId=$playlistId';
+    final url = Uri.parse("$base?$target&page=$page&limit=$limit");
+    try {
+      final token = await getToken();
+      final res = await http
+          .get(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              if (token != null) 'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 20));
+
+      if (res.statusCode == 200) {
+        final decoded = jsonDecode(res.body);
+        if (decoded is List) {
+          // Fallback for older backend versions
+          return decoded.map((item) => item as Map<String, dynamic>).toList();
+        }
+        if (decoded is Map && decoded['items'] is List) {
+          final List<dynamic> items = decoded['items'];
+          return items.map((item) => item as Map<String, dynamic>).toList();
+        }
+      }
+      return [];
+    } catch (e) {
+      // log error silently or with your logging framework
+      return [];
+    }
+  }
+
+  // Like bình luận
+  static Future<Map<String, dynamic>> likeComment(int commentId) async {
+    final url = Uri.parse("${ApiConstants.comments}/$commentId/like");
+    try {
+      final token = await getToken();
+      if (token == null) {
+        return {'message': 'No token found'};
+      }
+
+      final res = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 20));
+
+      if (res.statusCode == 200) {
+        return jsonDecode(res.body) as Map<String, dynamic>;
+      }
+      return {'message': 'Failed to like comment'};
+    } catch (e) {
+      return {'message': e.toString()};
+    }
+  }
+
+  // ==================== REPORT METHODS ====================
+
+  // Báo cáo bình luận
+  static Future<Map<String, dynamic>> reportComment({
+    required int commentId,
+    required String message,
+  }) async {
+    final url = Uri.parse("${ApiConstants.reports}/$commentId");
+    try {
+      final token = await getToken();
+      if (token == null) {
+        return {'message': 'No token found'};
+      }
+
+      final res = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({'message': message}),
+          )
+          .timeout(const Duration(seconds: 20));
+
+      if (res.statusCode == 200) {
+        return jsonDecode(res.body) as Map<String, dynamic>;
+      }
+      return {'message': 'Failed to report comment'};
+    } catch (e) {
+      return {'message': e.toString()};
+    }
+  }
+
+  // ==================== TOKEN METHODS ====================
+
   // Lấy token hiện tại
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('token');
+    return prefs.getString('jwt_token');
+  }
+
+  // ==================== FAVORITES METHODS ====================
+
+  // Get current user's favorite song IDs
+  static Future<List<int>> getFavoritesIds() async {
+    final url = Uri.parse(ApiConstants.favorites);
+    try {
+      final token = await getToken();
+      if (token == null) return [];
+      final res = await http
+          .get(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 20));
+      if (res.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(res.body);
+        return data
+            .map((e) => int.tryParse(e.toString()) ?? 0)
+            .where((e) => e > 0)
+            .toList();
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // Add a song to favorites
+  static Future<bool> addFavorite(int songId) async {
+    final url = Uri.parse(ApiConstants.favorites);
+    try {
+      final token = await getToken();
+      if (token == null) return false;
+      final res = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({'songId': songId}),
+          )
+          .timeout(const Duration(seconds: 20));
+      return res.statusCode == 201;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Remove a song from favorites
+  static Future<bool> removeFavorite(int songId) async {
+    final url = Uri.parse('${ApiConstants.favorites}/$songId');
+    try {
+      final token = await getToken();
+      if (token == null) return false;
+      final res = await http
+          .delete(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 20));
+      return res.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // ==================== PLAYLIST METHODS ====================
+
+  // Rename a playlist
+  static Future<bool> renamePlaylist(int playlistId, String newName) async {
+    final url = Uri.parse('${ApiConstants.playlists}/$playlistId');
+    try {
+      final token = await getToken();
+      if (token == null) return false;
+      final res = await http
+          .put(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({'name': newName}),
+          )
+          .timeout(const Duration(seconds: 20));
+      return res.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Delete a playlist
+  static Future<bool> deletePlaylist(int playlistId) async {
+    final url = Uri.parse('${ApiConstants.playlists}/$playlistId');
+    try {
+      final token = await getToken();
+      if (token == null) return false;
+      final res = await http
+          .delete(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 20));
+      return res.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Add a song to a playlist
+  static Future<bool> addSongToPlaylist(int playlistId, int songId) async {
+    final url = Uri.parse(
+      '${ApiConstants.playlists}/$playlistId/songs/$songId',
+    );
+    try {
+      final token = await getToken();
+      if (token == null) return false;
+      final res = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 20));
+      return res.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
   }
 
   // Đăng xuất
   static Future<void> signOut() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('token');
+    await prefs.remove('jwt_token');
   }
 }

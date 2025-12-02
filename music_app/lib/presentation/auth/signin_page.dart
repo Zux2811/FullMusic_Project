@@ -57,7 +57,7 @@ class _SignInPageState extends State<SignInPage>
       if (res['token'] != null) {
         // ✅ Lưu token và chuyển sang HomePage
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', res['token']);
+        await prefs.setString('jwt_token', res['token']);
 
         ScaffoldMessenger.of(
           context,
@@ -90,7 +90,9 @@ class _SignInPageState extends State<SignInPage>
   Future<void> _loginWithGoogle() async {
     setState(() => _isGoogleLoading = true);
     try {
-      final google = GoogleSignIn(serverClientId: ApiConstants.googleWebClientId);
+      final google = GoogleSignIn(
+        serverClientId: ApiConstants.googleWebClientId,
+      );
       final account = await google.signIn();
       if (account == null) {
         if (!mounted) return;
@@ -129,9 +131,9 @@ class _SignInPageState extends State<SignInPage>
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Google Sign-In Error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Google Sign-In Error: $e')));
     } finally {
       if (mounted) setState(() => _isGoogleLoading = false);
     }
@@ -145,41 +147,48 @@ class _SignInPageState extends State<SignInPage>
 
   @override
   Widget build(BuildContext context) {
+    final canPop = Navigator.of(context).canPop();
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
+        leading:
+            canPop
+                ? IconButton(
+                  icon: Icon(
+                    Icons.chevron_left,
+                    color: Theme.of(context).colorScheme.onSurface,
+                    size: 28,
+                  ),
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  tooltip: 'Back',
+                )
+                : null,
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 30),
           child: SingleChildScrollView(
             child: Column(
               children: [
-                const SizedBox(height: 80),
+                const SizedBox(height: 40),
                 Image.asset('assets/logo/logo.png', height: 130),
                 const SizedBox(height: 30),
-                const Text(
+                Text(
                   "Welcome Back",
-                  style: TextStyle(
-                    fontSize: 28,
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 30),
 
                 // Email
                 TextField(
                   controller: _emailController,
-                  style: const TextStyle(color: Colors.white),
+                  style: Theme.of(context).textTheme.bodyLarge,
                   decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.email, color: Colors.white70),
+                    prefixIcon: const Icon(Icons.email),
                     hintText: "Email",
-                    hintStyle: const TextStyle(color: Colors.white54),
-                    filled: true,
-                    fillColor: Colors.white10,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
                   ),
                 ),
                 const SizedBox(height: 15),
@@ -188,25 +197,17 @@ class _SignInPageState extends State<SignInPage>
                 TextField(
                   controller: _passwordController,
                   obscureText: !_showPassword,
-                  style: const TextStyle(color: Colors.white),
+                  style: Theme.of(context).textTheme.bodyLarge,
                   decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.lock, color: Colors.white70),
+                    prefixIcon: const Icon(Icons.lock),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _showPassword ? Icons.visibility : Icons.visibility_off,
-                        color: Colors.white70,
                       ),
                       onPressed:
                           () => setState(() => _showPassword = !_showPassword),
                     ),
                     hintText: "Password",
-                    hintStyle: const TextStyle(color: Colors.white54),
-                    filled: true,
-                    fillColor: Colors.white10,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
                   ),
                 ),
 
@@ -216,7 +217,8 @@ class _SignInPageState extends State<SignInPage>
                 ElevatedButton(
                   onPressed: _isLoading ? null : _login,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.cyanAccent[700],
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
                     minimumSize: const Size(double.infinity, 55),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -232,67 +234,78 @@ class _SignInPageState extends State<SignInPage>
                               size: 28,
                             ),
                           )
-                          : const Text(
+                          : Text(
                             "Login",
-                            style: TextStyle(
-                              color: Colors.black,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: Theme.of(context).textTheme.bodyLarge
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                 ),
 
                 const SizedBox(height: 25),
 
-                    // Or divider
-                    Row(
-                      children: const [
-                        Expanded(child: Divider(color: Colors.white24)),
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 12),
-                          child: Text(
-                            "OR",
-                            style: TextStyle(color: Colors.white54),
-                          ),
-                        ),
-                        Expanded(child: Divider(color: Colors.white24)),
-                      ],
+                // Or divider
+                Row(
+                  children: [
+                    Expanded(
+                      child: Divider(color: Theme.of(context).dividerColor),
                     ),
-
-                    const SizedBox(height: 16),
-
-                    // Google Sign-In button
-                    OutlinedButton.icon(
-                      onPressed: _isGoogleLoading ? null : _loginWithGoogle,
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.white24),
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(double.infinity, 52),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        "OR",
+                        style: Theme.of(context).textTheme.bodyMedium,
                       ),
-                      icon: _isGoogleLoading
+                    ),
+                    Expanded(
+                      child: Divider(color: Theme.of(context).dividerColor),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+
+                // Google Sign-In button
+                OutlinedButton.icon(
+                  onPressed: _isGoogleLoading ? null : _loginWithGoogle,
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.white24),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 52),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon:
+                      _isGoogleLoading
                           ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Icon(Icons.g_mobiledata, size: 28, color: Colors.white),
-                      label: Text(
-                        _isGoogleLoading ? "Signing in..." : "Continue with Google",
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                          : const Icon(
+                            Icons.g_mobiledata,
+                            size: 28,
+                            color: Colors.white,
+                          ),
+                  label: Text(
+                    _isGoogleLoading ? "Signing in..." : "Continue with Google",
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
+                  ),
+                ),
 
-                    const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text(
+                    Text(
                       "Don't have an account?",
-                      style: TextStyle(color: Colors.white70),
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     TextButton(
                       onPressed: () {
@@ -301,10 +314,10 @@ class _SignInPageState extends State<SignInPage>
                           MaterialPageRoute(builder: (_) => const SignUpPage()),
                         );
                       },
-                      child: const Text(
+                      child: Text(
                         "Sign up",
                         style: TextStyle(
-                          color: Colors.cyanAccent,
+                          color: Theme.of(context).colorScheme.primary,
                           fontWeight: FontWeight.bold,
                         ),
                       ),

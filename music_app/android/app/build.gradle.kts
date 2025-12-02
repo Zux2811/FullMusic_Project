@@ -8,8 +8,8 @@ plugins {
 
 android {
     namespace = "com.example.music_app"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    compileSdk = 35
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         // Use Java 17 as required by AGP 8.x

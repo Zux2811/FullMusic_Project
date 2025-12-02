@@ -6,7 +6,8 @@ export default function ReportsPage() {
   const [reports, setReports] = useState([]);
 
   const fetchReports = async () => {
-    const res = await api.get("/admin/reports");
+    // Canonical endpoint moved to /api/reports (admin-authenticated)
+    const res = await api.get("/reports");
     setReports(res.data);
   };
 

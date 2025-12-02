@@ -18,6 +18,8 @@ dependencies:
   font_awesome_flutter: ^10.5.0
   google_fonts: ^4.0.3
   google_sign_in: ^6.2.1
+  provider: ^6.0.0
+  just_audio: ^0.9.42
 
 dev_dependencies:
   flutter_test:
